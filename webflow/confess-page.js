@@ -11,7 +11,7 @@
 
   function debugLog(...args) {
     if (DEBUG) {
-      debugLog(...args);
+      console.log(...args);
     }
   }
 
