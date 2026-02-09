@@ -137,8 +137,8 @@ console.log('PMP V1 Confession form script loaded');
       const confessionText = confessionInput.value.trim();
       console.log('Confession text length:', confessionText.length);
 
-      if (!confessionText || confessionText.length < 120) {
-        showError('Confession must be at least 120 characters long.');
+      if (!confessionText || confessionText.length < 20) {
+        showError('Confession must be at least 20 characters long.');
         return false;
       }
 

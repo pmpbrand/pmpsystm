@@ -15,9 +15,9 @@ export function validateConfession(text: string): { valid: boolean; error?: stri
     return { valid: false, error: 'Confession text cannot be empty' }
   }
 
-  // Minimum length: 120 characters
-  if (trimmed.length < 120) {
-    return { valid: false, error: 'Confession must be at least 120 characters long' }
+  // Minimum length: 20 characters
+  if (trimmed.length < 20) {
+    return { valid: false, error: 'Confession must be at least 20 characters long' }
   }
 
   // Check for excessive repetition (same character ratio > 0.6)
