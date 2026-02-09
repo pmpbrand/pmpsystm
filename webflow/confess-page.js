@@ -1,5 +1,6 @@
 // Cloudflare Turnstile Script
 // NOTE: include this separately in Webflow <head>
+console.log('PMP V1 Confession form script loaded');
 
 (function() {
   'use strict';
@@ -7,15 +8,6 @@
   const EDGE_FUNCTION_URL = 'https://nueebvyiswezishlzuku.supabase.co/functions/v1/confess';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51ZWVidnlpc3dlemlzaGx6dWt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNjM5MTksImV4cCI6MjA4MTYzOTkxOX0.IKOeMO8RDgR8KlG_RpnTKVtbh2prJhbAyKIt1R89j4M';
   const TURNSTILE_SITE_KEY = '0x4AAAAAACM4eF914zsRvui3';
-  const DEBUG = window.PMP_DEBUG === true;
-
-  function debugLog(...args) {
-    if (DEBUG) {
-      console.log(...args);
-    }
-  }
-
-  debugLog('PMP V1 Confession form script loaded');
 
   let turnstileToken = ''; // Store token when widget completes
   let turnstileWidgetId = null;
@@ -38,15 +30,7 @@
   }
 
   function init() {
-    debugLog('Initializing PMP V1 confession form handler...');
-
-    const submitButtons = [];
-    const setSubmitEnabled = (enabled) => {
-      submitButtons.forEach((btn) => {
-        btn.disabled = !enabled;
-        btn.setAttribute('aria-disabled', String(!enabled));
-      });
-    };
+    console.log('Initializing PMP V1 confession form handler...');
 
     const form = document.querySelector('form[data-name="Confession"]') ||
                  document.querySelector('form#wf-form-Confession') ||
@@ -59,7 +43,7 @@
       return;
     }
 
-    debugLog('Form found:', form);
+    console.log('Form found:', form);
 
     let confessionInput = form.querySelector('textarea[name="confession_text"]') ||
                          form.querySelector('input[name="confession_text"]') ||
@@ -71,7 +55,7 @@
       return;
     }
 
-    debugLog('Confession input found:', confessionInput);
+    console.log('Confession input found:', confessionInput);
 
     form.removeAttribute('action');
     form.setAttribute('method', 'post');
@@ -86,8 +70,7 @@
     if (!ourTurnstileContainer) {
       ourTurnstileContainer = document.createElement('div');
       ourTurnstileContainer.id = 'pmp-turnstile-widget';
-      ourTurnstileContainer.setAttribute('aria-hidden', 'true');
-      ourTurnstileContainer.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 300px; height: 65px; opacity: 0; pointer-events: none;';
+      ourTurnstileContainer.style.cssText = 'margin: 15px 0;';
       
       const submitButton = form.querySelector('input[type="submit"], button[type="submit"]');
       if (submitButton && submitButton.parentNode) {
@@ -108,26 +91,22 @@
             theme: 'dark',
             size: 'normal',
             callback: function(token) {
+              // Store token when widget completes
               turnstileToken = token;
-              setSubmitEnabled(true);
-              debugLog('Turnstile token generated');
+              console.log('Turnstile callback - token received and stored');
             },
             'error-callback': function() {
               turnstileToken = '';
-              setSubmitEnabled(false);
               console.error('Turnstile error callback');
             },
             'expired-callback': function() {
               turnstileToken = '';
-              setSubmitEnabled(false);
-              debugLog('Turnstile token expired');
+              console.log('Turnstile expired');
             },
           });
-          debugLog('Turnstile widget rendered', turnstileWidgetId);
+          console.log('Our Turnstile widget rendered, ID:', turnstileWidgetId);
         } catch (error) {
           console.error('Error rendering Turnstile:', error);
-          setSubmitEnabled(false);
-          showError('Verification failed to load. Please refresh and try again.');
         }
       }
     }
@@ -146,17 +125,17 @@
 
     const submitHandler = async function(e) {
       if (isSubmitting) {
-        debugLog('Already submitting, ignoring...');
+        console.log('Already submitting, ignoring...');
         return false;
       }
 
-      debugLog('Form submit intercepted!');
+      console.log('Form submit intercepted!');
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
 
       const confessionText = confessionInput.value.trim();
-      debugLog('Confession text length:', confessionText.length);
+      console.log('Confession text length:', confessionText.length);
 
       if (!confessionText || confessionText.length < 120) {
         showError('Confession must be at least 120 characters long.');
@@ -167,29 +146,29 @@
       let token = turnstileToken;
       
       if (!token) {
+        // Check hidden input in our container
         const tokenInput = ourTurnstileContainer.querySelector('input[name="cf-turnstile-response"]');
         if (tokenInput && tokenInput.value) {
           token = tokenInput.value;
-          debugLog('Turnstile token recovered from hidden input');
+          console.log('Got token from hidden input');
         }
       }
 
       if (!token) {
-        setSubmitEnabled(false);
-        showError('Verification is still loading. Please wait a moment and try again.');
+        showError('Please complete the verification widget above the submit button. Wait for the checkmark to appear.');
         return false;
       }
 
-      debugLog('Turnstile token attached', token.substring(0, 20) + '...');
+      console.log('Turnstile token available:', token.substring(0, 20) + '...');
 
       isSubmitting = true;
       const fpHash = await generateFingerprintHash();
-      debugLog('Fingerprint hash generated');
+      console.log('Fingerprint hash generated');
 
       showLoading();
 
       try {
-        debugLog('Sending request to:', EDGE_FUNCTION_URL);
+        console.log('Sending request to:', EDGE_FUNCTION_URL);
         const response = await fetch(EDGE_FUNCTION_URL, {
           method: 'POST',
           headers: {
@@ -204,9 +183,9 @@
           }),
         });
 
-        debugLog('Edge Function response status:', response.status);
+        console.log('Response status:', response.status);
         const data = await response.json();
-        debugLog('Edge Function response:', data);
+        console.log('Response data:', data);
 
         if (!response.ok) {
           const errorMessage = data.error || 'Confession not accepted.';
@@ -239,12 +218,11 @@
     };
 
     // Intercept submit button clicks - but only once
-    const submitButtonNodes = form.querySelectorAll('input[type="submit"], button[type="submit"], button:not([type])');
-    submitButtonNodes.forEach(btn => {
+    const submitButtons = form.querySelectorAll('input[type="submit"], button[type="submit"], button:not([type])');
+    submitButtons.forEach(btn => {
       // Remove any existing listeners first
       const newBtn = btn.cloneNode(true);
       btn.parentNode.replaceChild(newBtn, btn);
-      submitButtons.push(newBtn);
       
       newBtn.addEventListener('click', function(e) {
         if (e.target.type === 'submit' || e.target.tagName === 'BUTTON') {
@@ -257,8 +235,7 @@
       }, true);
     });
 
-    setSubmitEnabled(false);
-    debugLog('Form handler attached successfully');
+    console.log('Form handler attached successfully');
   }
 
   function showLoading() {
