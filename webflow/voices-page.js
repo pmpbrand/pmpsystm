@@ -39,6 +39,7 @@
       : [];
 
     const loadingEl = document.querySelector('[data-voices-loading]') || document.getElementById('voices-loading');
+    const voteStatusEl = document.getElementById('voices-vote-status');
     let errorBox = document.querySelector('[data-voices-error]');
 
     if (!errorBox && gateForm) {
@@ -53,6 +54,7 @@
     let cursorCol = 0;
     let cursorRow = 0;
     let itemIndex = 0;
+    let hasVoted = false;
 
     smallTemplate.style.display = 'none';
     if (bigTemplate) {
@@ -131,6 +133,7 @@
           loadingEl.style.display = 'block';
         }
         await loadAllConfessions(code);
+        updateVoteStatus();
         centerWorld(panState, viewport, worldContainer);
       } catch (err) {
         console.error('Ticket validation failed:', err);
@@ -157,6 +160,11 @@
       if (!errorBox) return;
       errorBox.textContent = message;
       errorBox.style.display = 'block';
+    }
+
+    function updateVoteStatus() {
+      if (!voteStatusEl) return;
+      voteStatusEl.textContent = hasVoted ? 'Vote used' : '1 vote left';
     }
 
     async function validateTicket(code) {
@@ -245,6 +253,10 @@
         if (confession.voted_by_me) {
           voteButton.textContent = 'Voted';
           voteButton.disabled = true;
+          if (!hasVoted) {
+            hasVoted = true;
+            updateVoteStatus();
+          }
         }
         voteButton.addEventListener('click', async (e) => {
           e.preventDefault();
@@ -255,6 +267,10 @@
             voteButton.textContent = 'Voted';
             if (voteCount) {
               voteCount.textContent = String((confession.vote_count || 0) + 1);
+            }
+            if (!hasVoted) {
+              hasVoted = true;
+              updateVoteStatus();
             }
           } else {
             voteButton.disabled = false;
