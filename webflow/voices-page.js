@@ -49,7 +49,7 @@
       return;
     }
 
-    const viewport = getElement(['[data-voices-viewport]', '.voices-world-viewport'], document) || worldContainer.parentElement || worldContainer;
+    const viewport = getElement(['[data-voices-viewport]', '#data-voices-viewport', '.voices-world-viewport', '#voices-viewport'], document) || worldContainer.parentElement || worldContainer;
 
     const gateForm = getElement([
       '[data-voices-gate]',
@@ -416,10 +416,22 @@
   }
 
   function measureBlock(templateBlock) {
-    const rect = templateBlock.getBoundingClientRect();
+    let rect = templateBlock.getBoundingClientRect();
     const computed = window.getComputedStyle(templateBlock);
     const marginX = parseFloat(computed.marginLeft || '0') + parseFloat(computed.marginRight || '0');
     const marginY = parseFloat(computed.marginTop || '0') + parseFloat(computed.marginBottom || '0');
+
+    if (!rect.width || !rect.height) {
+      const clone = templateBlock.cloneNode(true);
+      clone.style.visibility = 'hidden';
+      clone.style.position = 'absolute';
+      clone.style.display = 'block';
+      clone.style.left = '-9999px';
+      clone.style.top = '0';
+      document.body.appendChild(clone);
+      rect = clone.getBoundingClientRect();
+      clone.remove();
+    }
 
     const blockWidth = rect.width || 400;
     const blockHeight = rect.height || 400;
