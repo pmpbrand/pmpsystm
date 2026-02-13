@@ -1,4 +1,4 @@
-// Voices page handler (ticket-gated confession world)
+// Voices page handler (modular grid confession world)
 
 (function() {
   'use strict';
@@ -6,7 +6,8 @@
   const EDGE_FUNCTION_URL = 'https://nueebvyiswezishlzuku.supabase.co/functions/v1/confessions-browse';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51ZWVidnlpc3dlemlzaGx6dWt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNjM5MTksImV4cCI6MjA4MTYzOTkxOX0.IKOeMO8RDgR8KlG_RpnTKVtbh2prJhbAyKIt1R89j4M';
   const DEBUG = window.PMP_DEBUG === true;
-  const PAGE_SIZE = 60;
+  const PAGE_SIZE = 200;
+  const BIG_EVERY = 8;
 
   function debugLog(...args) {
     if (DEBUG) {
@@ -14,99 +15,51 @@
     }
   }
 
-  function normalizeCode(code) {
-    return (code || '').trim().toUpperCase();
-  }
-
-  function getElement(selectors, root = document) {
-    for (const selector of selectors) {
-      const el = root.querySelector(selector);
-      if (el) return el;
-    }
-    return null;
-  }
-
-  function createErrorBox(container) {
-    const errorBox = document.createElement('div');
-    errorBox.setAttribute('data-voices-error', '');
-    errorBox.style.cssText = 'margin-top: 12px; padding: 10px 12px; background: #fee; border: 1px solid #fcc; color: #c33; border-radius: 4px; font-size: 14px; display: none;';
-    container.appendChild(errorBox);
-    return errorBox;
-  }
-
   function init() {
-    const templateBlock = document.querySelector('.confession_block_template');
-    const bigTemplateBlock = document.querySelector('.confession_block_big_template');
-    if (!templateBlock) {
+    const viewport = document.querySelector('[data-voices-viewport]') || document.body;
+    const smallTemplate = document.querySelector('.confession_block_template');
+    const bigTemplate = document.querySelector('.confession_block_big_template');
+
+    if (!smallTemplate) {
       console.error('Voices template block not found');
       setTimeout(init, 500);
       return;
     }
 
-    const worldContainer = templateBlock.parentElement;
+    const worldContainer = smallTemplate.parentElement;
     if (!worldContainer) {
       console.error('Voices world container not found');
       return;
     }
 
-    const viewport = getElement(['[data-voices-viewport]', '#data-voices-viewport', '.voices-world-viewport', '#voices-viewport'], document) || worldContainer.parentElement || worldContainer;
+    const gateForm = document.querySelector('#voices-gate') || document.querySelector('form');
+    const ticketInput = gateForm ? gateForm.querySelector('#voices-ticket-input, input[name="code"], input[type="text"]') : null;
+    const submitButtons = gateForm
+      ? gateForm.querySelectorAll('#voices-ticket-submit, button[type="submit"], button:not([type])')
+      : [];
 
-    const gateForm = getElement([
-      '[data-voices-gate]',
-      'form[data-name="Voices Gate"]',
-      'form#voices-gate',
-      'form.voices-gate',
-      'form'
-    ]);
+    const loadingEl = document.querySelector('[data-voices-loading]') || document.getElementById('voices-loading');
+    let errorBox = document.querySelector('[data-voices-error]');
 
-    const ticketInput = getElement([
-      '#voices-ticket-input',
-      'input[name="code"]',
-      '.voices-ticket-input',
-      'input[type="text"]'
-    ], gateForm || document);
-
-    const submitButtons = [];
-    const submitButtonNodes = gateForm
-      ? gateForm.querySelectorAll('#voices-ticket-submit, button[type="submit"], .voices-ticket-submit, button:not([type])')
-      : document.querySelectorAll('#voices-ticket-submit, button[type="submit"], .voices-ticket-submit, button:not([type])');
-
-    const loadingEl = getElement([
-      '[data-voices-loading]',
-      '#voices-loading',
-      '.voices-loading'
-    ], document);
-
-    let errorBox = getElement(['[data-voices-error]'], gateForm || document);
     if (!errorBox && gateForm) {
       errorBox = createErrorBox(gateForm);
     }
 
-    let ticketCode = '';
-    let isValidating = false;
-    let offset = 0;
-    let isFetching = false;
-    let canLoadMore = true;
-    let pendingAutoLoad = false;
-    const confessionMap = new Map();
+    const { cellWidth, cellHeight } = measureBlock(smallTemplate);
+    const columns = Math.max(1, Math.floor((viewport.clientWidth || window.innerWidth || cellWidth) / cellWidth));
 
-    const { cellWidth, cellHeight } = measureBlock(templateBlock);
-    const viewportWidth = viewport?.clientWidth || window.innerWidth || cellWidth;
-    const columns = Math.max(1, Math.floor(viewportWidth / cellWidth));
     const occupancy = new Set();
     let cursorCol = 0;
     let cursorRow = 0;
     let itemIndex = 0;
 
-    templateBlock.style.display = 'none';
-    if (bigTemplateBlock) {
-      bigTemplateBlock.style.display = 'none';
+    smallTemplate.style.display = 'none';
+    if (bigTemplate) {
+      bigTemplate.style.display = 'none';
     }
 
     setupWorldStyles(viewport, worldContainer);
-    setupPanning(viewport, worldContainer, () => {
-      maybeLoadMore();
-    });
+    const panState = setupPanning(viewport, worldContainer);
 
     if (loadingEl) {
       loadingEl.style.display = 'none';
@@ -133,19 +86,18 @@
       };
     }
 
-    submitButtonNodes.forEach((btn) => {
+    submitButtons.forEach((btn) => {
       const newBtn = btn.cloneNode(true);
       if (btn.parentNode) {
         btn.parentNode.replaceChild(newBtn, btn);
       }
-      submitButtons.push(newBtn);
       newBtn.addEventListener('click', function(e) {
         if (e.target.type === 'submit' || e.target.tagName === 'BUTTON') {
           e.preventDefault();
           e.stopPropagation();
-          if (gateForm && !isValidating) {
+          if (gateForm) {
             gateForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-          } else if (!gateForm) {
+          } else {
             handleSubmit(e);
           }
         }
@@ -153,7 +105,6 @@
     });
 
     async function validateAndLoad() {
-      if (isValidating) return;
       if (!ticketInput) {
         showGateError('Ticket input not found.');
         return;
@@ -165,39 +116,29 @@
       }
 
       setGateBusy(true);
-      isValidating = true;
       try {
         const ok = await validateTicket(code);
         if (!ok) {
           showGateError('Invalid ticket code.');
           setGateBusy(false);
-          isValidating = false;
           return;
         }
-        ticketCode = code;
-        hideGate();
-        await loadNextPage();
+        if (gateForm) {
+          gateForm.style.display = 'none';
+        }
+        if (loadingEl) {
+          loadingEl.style.display = 'block';
+        }
+        await loadAllConfessions(code);
+        centerWorld(panState, viewport, worldContainer);
       } catch (err) {
         console.error('Ticket validation failed:', err);
         showGateError('Unable to validate ticket. Please try again.');
       } finally {
         setGateBusy(false);
-        isValidating = false;
-      }
-    }
-
-    function showGateError(message) {
-      if (!errorBox) return;
-      errorBox.textContent = message;
-      errorBox.style.display = 'block';
-    }
-
-    function hideGate() {
-      if (gateForm) {
-        gateForm.style.display = 'none';
-      }
-      if (loadingEl) {
-        loadingEl.style.display = 'block';
+        if (loadingEl) {
+          loadingEl.style.display = 'none';
+        }
       }
     }
 
@@ -209,6 +150,12 @@
       if (ticketInput) {
         ticketInput.disabled = isBusy;
       }
+    }
+
+    function showGateError(message) {
+      if (!errorBox) return;
+      errorBox.textContent = message;
+      errorBox.style.display = 'block';
     }
 
     async function validateTicket(code) {
@@ -227,74 +174,53 @@
       return response.ok && data.ok === true;
     }
 
-    async function loadNextPage() {
-      if (isFetching || !canLoadMore) return;
-      isFetching = true;
-      if (loadingEl) loadingEl.style.display = 'block';
-
-      try {
-        const url = new URL(EDGE_FUNCTION_URL);
-        url.searchParams.set('code', ticketCode);
-        url.searchParams.set('limit', String(PAGE_SIZE));
-        url.searchParams.set('offset', String(offset));
-
-        const response = await fetch(url.toString(), {
-          method: 'GET',
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          }
+    async function loadAllConfessions(code) {
+      let offset = 0;
+      let fetched = 0;
+      do {
+        const batch = await fetchConfessions(code, offset);
+        fetched = batch.length;
+        batch.forEach((confession) => {
+          buildConfessionBlock(confession, code);
         });
+        offset += fetched;
+      } while (fetched === PAGE_SIZE);
+    }
 
-        const data = await response.json();
-        debugLog('Confession fetch response', data);
+    async function fetchConfessions(code, offset) {
+      const url = new URL(EDGE_FUNCTION_URL);
+      url.searchParams.set('code', code);
+      url.searchParams.set('limit', String(PAGE_SIZE));
+      url.searchParams.set('offset', String(offset));
 
-        if (!response.ok || !data.ok) {
-          showGateError(data.error || 'Failed to load confessions.');
-          canLoadMore = false;
-          return;
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         }
+      });
 
-        const confessions = data.confessions || [];
-        if (confessions.length < PAGE_SIZE) {
-          canLoadMore = false;
-          pendingAutoLoad = false;
-        } else {
-          pendingAutoLoad = true;
-        }
+      const data = await response.json();
+      debugLog('Confession fetch response', data);
 
-        confessions.forEach((confession) => {
-          if (confessionMap.has(confession.id)) {
-            return;
-          }
-          const block = buildConfessionBlock(confession);
-          confessionMap.set(confession.id, block);
-        });
-
-        offset += confessions.length;
-      } catch (err) {
-        console.error('Failed to load confessions:', err);
-        showGateError('Failed to load confessions. Please refresh.');
-      } finally {
-        isFetching = false;
-        if (loadingEl) loadingEl.style.display = 'none';
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to load confessions');
       }
+
+      return data.confessions || [];
     }
 
-    function maybeLoadMore() {
-      if (isFetching || !canLoadMore || !pendingAutoLoad) return;
-      pendingAutoLoad = false;
-      loadNextPage();
-    }
-
-    function buildConfessionBlock(confession) {
-      let useBig = Boolean(bigTemplateBlock) && (itemIndex + 1) % 8 === 0;
+    function buildConfessionBlock(confession, code) {
+      let useBig = Boolean(bigTemplate) && (itemIndex + 1) % BIG_EVERY === 0;
       if (useBig && (columns < 2 || !canFitAtCursor(2))) {
         useBig = false;
       }
+
       const span = useBig ? 2 : 1;
-      const template = useBig ? bigTemplateBlock : templateBlock;
+      const template = useBig ? bigTemplate : smallTemplate;
       const clone = template.cloneNode(true);
+
       clone.style.display = '';
       clone.style.position = 'absolute';
       clone.style.left = '0';
@@ -323,7 +249,7 @@
           e.preventDefault();
           if (voteButton.disabled) return;
           voteButton.disabled = true;
-          const success = await submitVote(confession.id);
+          const success = await submitVote(code, confession.id);
           if (success) {
             voteButton.textContent = 'Voted';
             if (voteCount) {
@@ -344,10 +270,9 @@
 
       worldContainer.appendChild(clone);
       itemIndex += 1;
-      return clone;
     }
 
-    async function submitVote(confessionId) {
+    async function submitVote(code, confessionId) {
       try {
         const response = await fetch(EDGE_FUNCTION_URL, {
           method: 'POST',
@@ -356,7 +281,7 @@
             'apikey': SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           },
-          body: JSON.stringify({ action: 'vote', code: ticketCode, confessionId })
+          body: JSON.stringify({ action: 'vote', code, confessionId })
         });
 
         const data = await response.json();
@@ -439,16 +364,6 @@
       clone.style.display = 'block';
       clone.style.left = '-9999px';
       clone.style.top = '0';
-
-      const computedWidth = computed.width;
-      const computedHeight = computed.height;
-      if (computedWidth && computedWidth !== 'auto') {
-        clone.style.width = computedWidth;
-      }
-      if (computedHeight && computedHeight !== 'auto') {
-        clone.style.height = computedHeight;
-      }
-
       document.body.appendChild(clone);
       rect = clone.getBoundingClientRect();
       clone.remove();
@@ -478,7 +393,7 @@
     worldContainer.style.transform = 'translate3d(0px, 0px, 0px)';
   }
 
-  function setupPanning(viewport, worldContainer, onPan) {
+  function setupPanning(viewport, worldContainer) {
     let isDragging = false;
     let startX = 0;
     let startY = 0;
@@ -487,7 +402,6 @@
 
     const updateTransform = () => {
       worldContainer.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
-      if (onPan) onPan();
     };
 
     viewport.addEventListener('mousedown', (e) => {
@@ -535,6 +449,34 @@
       updateTransform();
       e.preventDefault();
     }, { passive: false });
+
+    return {
+      setOffset(x, y) {
+        offsetX = x;
+        offsetY = y;
+        updateTransform();
+      },
+    };
+  }
+
+  function centerWorld(panState, viewport, worldContainer) {
+    const worldWidth = worldContainer.offsetWidth || viewport.clientWidth || 0;
+    const worldHeight = worldContainer.offsetHeight || viewport.clientHeight || 0;
+    const offsetX = (viewport.clientWidth - worldWidth) / 2;
+    const offsetY = (viewport.clientHeight - worldHeight) / 2;
+    panState.setOffset(offsetX, offsetY);
+  }
+
+  function normalizeCode(code) {
+    return (code || '').trim().toUpperCase();
+  }
+
+  function createErrorBox(container) {
+    const errorBox = document.createElement('div');
+    errorBox.setAttribute('data-voices-error', '');
+    errorBox.style.cssText = 'margin-top: 12px; padding: 10px 12px; background: #fee; border: 1px solid #fcc; color: #c33; border-radius: 4px; font-size: 14px; display: none;';
+    container.appendChild(errorBox);
+    return errorBox;
   }
 
   if (document.readyState === 'loading') {
