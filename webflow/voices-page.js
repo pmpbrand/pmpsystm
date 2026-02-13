@@ -35,9 +35,10 @@
   }
 
   function init() {
-    const templateBlock = document.querySelector('.--confession_block_template');
+    const templateBlock = document.querySelector('.confession_block_template');
     if (!templateBlock) {
       console.error('Voices template block not found');
+      setTimeout(init, 500);
       return;
     }
 
@@ -284,7 +285,7 @@
       clone.style.top = '0';
       clone.style.transform = 'translate(0px, 0px)';
 
-      const quote = clone.querySelector('.--confession_quote');
+      const quote = clone.querySelector('.confession_quote');
       if (quote) {
         quote.textContent = confession.text || '';
       }
