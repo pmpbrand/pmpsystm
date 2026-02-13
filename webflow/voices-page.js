@@ -90,8 +90,8 @@
     let pendingAutoLoad = false;
     const confessionMap = new Map();
 
-    const { cellWidth, cellHeight } = measureBlock(templateBlock);
-    const columns = Math.max(2, Math.floor((viewport.clientWidth || window.innerWidth) / cellWidth));
+    const { cellWidth, cellHeight } = getCellMetrics(templateBlock, viewport);
+    const columns = getColumnCount(viewport, cellWidth);
     const occupancy = new Set();
     let cursorCol = 0;
     let cursorRow = 0;
@@ -287,7 +287,10 @@
     }
 
     function buildConfessionBlock(confession) {
-      const useBig = bigTemplateBlock && (itemIndex + 1) % 8 === 0;
+      let useBig = Boolean(bigTemplateBlock) && (itemIndex + 1) % 8 === 0;
+      if (useBig && (columns < 2 || !canFitAtCursor(2))) {
+        useBig = false;
+      }
       const span = useBig ? 2 : 1;
       const template = useBig ? bigTemplateBlock : templateBlock;
       const clone = template.cloneNode(true);
@@ -303,8 +306,8 @@
         quote.textContent = confession.text || '';
       }
 
-      const voteButton = clone.querySelector('.--confession_vote_button');
-      const voteCount = clone.querySelector('.--confession_vote_count');
+      const voteButton = clone.querySelector('.confession_vote_button');
+      const voteCount = clone.querySelector('.confession_vote_count');
 
       if (voteCount) {
         voteCount.textContent = String(confession.vote_count || 0);
@@ -388,6 +391,13 @@
       }
     }
 
+    function canFitAtCursor(span) {
+      if (span > 1 && cursorCol + span > columns) {
+        return false;
+      }
+      return !isOccupied(cursorCol, cursorRow, span);
+    }
+
     function isOccupied(col, row, span) {
       for (let r = row; r < row + span; r += 1) {
         for (let c = col; c < col + span; c += 1) {
@@ -413,6 +423,37 @@
     const nextHeight = Math.max(worldContainer.offsetHeight, rows * cellHeight);
     worldContainer.style.width = `${nextWidth}px`;
     worldContainer.style.height = `${nextHeight}px`;
+  }
+
+  function getCellMetrics(templateBlock, viewport) {
+    const dataSize = templateBlock.getAttribute('data-voices-cell-size') || viewport?.getAttribute('data-voices-cell-size');
+    const dataWidth = templateBlock.getAttribute('data-voices-cell-width') || viewport?.getAttribute('data-voices-cell-width');
+    const dataHeight = templateBlock.getAttribute('data-voices-cell-height') || viewport?.getAttribute('data-voices-cell-height');
+
+    const parsedSize = dataSize ? parseFloat(dataSize) : 0;
+    const parsedWidth = dataWidth ? parseFloat(dataWidth) : 0;
+    const parsedHeight = dataHeight ? parseFloat(dataHeight) : 0;
+
+    if (parsedSize || (parsedWidth && parsedHeight)) {
+      const width = parsedWidth || parsedSize;
+      const height = parsedHeight || parsedSize;
+      return {
+        cellWidth: width,
+        cellHeight: height,
+      };
+    }
+
+    return measureBlock(templateBlock);
+  }
+
+  function getColumnCount(viewport, cellWidth) {
+    const dataColumns = viewport?.getAttribute('data-voices-columns');
+    const parsedColumns = dataColumns ? parseInt(dataColumns, 10) : 0;
+    if (parsedColumns && parsedColumns > 0) {
+      return parsedColumns;
+    }
+    const viewportWidth = viewport?.clientWidth || window.innerWidth || cellWidth;
+    return Math.max(1, Math.floor(viewportWidth / cellWidth));
   }
 
   function measureBlock(templateBlock) {
