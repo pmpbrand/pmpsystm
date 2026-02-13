@@ -36,6 +36,7 @@
 
   function init() {
     const templateBlock = document.querySelector('.confession_block_template');
+    const bigTemplateBlock = document.querySelector('.confession_block_big_template');
     if (!templateBlock) {
       console.error('Voices template block not found');
       setTimeout(init, 500);
@@ -89,9 +90,17 @@
     let pendingAutoLoad = false;
     const confessionMap = new Map();
 
-    const { cellWidth, cellHeight, jitterX, jitterY } = measureBlock(templateBlock);
-    const nextSpiral = createSpiral();
+    const { cellWidth, cellHeight } = measureBlock(templateBlock);
+    const columns = Math.max(2, Math.floor((viewport.clientWidth || window.innerWidth) / cellWidth));
+    const occupancy = new Set();
+    let cursorCol = 0;
+    let cursorRow = 0;
+    let itemIndex = 0;
+
     templateBlock.style.display = 'none';
+    if (bigTemplateBlock) {
+      bigTemplateBlock.style.display = 'none';
+    }
 
     setupWorldStyles(viewport, worldContainer);
     setupPanning(viewport, worldContainer, () => {
@@ -278,14 +287,18 @@
     }
 
     function buildConfessionBlock(confession) {
-      const clone = templateBlock.cloneNode(true);
+      const useBig = bigTemplateBlock && (itemIndex + 1) % 8 === 0;
+      const span = useBig ? 2 : 1;
+      const template = useBig ? bigTemplateBlock : templateBlock;
+      const clone = template.cloneNode(true);
       clone.style.display = '';
       clone.style.position = 'absolute';
       clone.style.left = '0';
       clone.style.top = '0';
       clone.style.transform = 'translate(0px, 0px)';
 
-      const quote = clone.querySelector('.confession_quote');
+      const quoteSelector = useBig ? '.confession_quote_big' : '.confession_quote';
+      const quote = clone.querySelector(quoteSelector);
       if (quote) {
         quote.textContent = confession.text || '';
       }
@@ -318,12 +331,15 @@
         });
       }
 
-      const position = nextSpiral();
-      const x = position.x * cellWidth + randomRange(-jitterX, jitterX);
-      const y = position.y * cellHeight + randomRange(-jitterY, jitterY);
+      const placement = nextPlacement(span);
+      const x = placement.col * cellWidth;
+      const y = placement.row * cellHeight;
       clone.style.transform = `translate(${x}px, ${y}px)`;
 
+      updateWorldSize(placement.row + span, columns, cellWidth, cellHeight, worldContainer);
+
       worldContainer.appendChild(clone);
+      itemIndex += 1;
       return clone;
     }
 
@@ -347,6 +363,56 @@
         return false;
       }
     }
+
+    function nextPlacement(span) {
+      while (true) {
+        if (cursorCol >= columns) {
+          cursorCol = 0;
+          cursorRow += 1;
+        }
+
+        if (span > 1 && cursorCol + span > columns) {
+          cursorCol = 0;
+          cursorRow += 1;
+          continue;
+        }
+
+        if (!isOccupied(cursorCol, cursorRow, span)) {
+          const placement = { col: cursorCol, row: cursorRow };
+          markOccupied(cursorCol, cursorRow, span);
+          cursorCol += span;
+          return placement;
+        }
+
+        cursorCol += 1;
+      }
+    }
+
+    function isOccupied(col, row, span) {
+      for (let r = row; r < row + span; r += 1) {
+        for (let c = col; c < col + span; c += 1) {
+          if (occupancy.has(`${c},${r}`)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function markOccupied(col, row, span) {
+      for (let r = row; r < row + span; r += 1) {
+        for (let c = col; c < col + span; c += 1) {
+          occupancy.add(`${c},${r}`);
+        }
+      }
+    }
+  }
+
+  function updateWorldSize(rows, columns, cellWidth, cellHeight, worldContainer) {
+    const nextWidth = Math.max(worldContainer.offsetWidth, columns * cellWidth);
+    const nextHeight = Math.max(worldContainer.offsetHeight, rows * cellHeight);
+    worldContainer.style.width = `${nextWidth}px`;
+    worldContainer.style.height = `${nextHeight}px`;
   }
 
   function measureBlock(templateBlock) {
@@ -361,8 +427,6 @@
     return {
       cellWidth: blockWidth + marginX,
       cellHeight: blockHeight + marginY,
-      jitterX: (blockWidth + marginX) * 0.2,
-      jitterY: (blockHeight + marginY) * 0.2,
     };
   }
 
@@ -435,40 +499,6 @@
       updateTransform();
       e.preventDefault();
     }, { passive: false });
-  }
-
-  function createSpiral() {
-    let x = 0;
-    let y = 0;
-    let dx = 1;
-    let dy = 0;
-    let segmentLength = 1;
-    let segmentPassed = 0;
-    let segmentTurns = 0;
-
-    return function next() {
-      const pos = { x, y };
-      x += dx;
-      y += dy;
-      segmentPassed += 1;
-
-      if (segmentPassed === segmentLength) {
-        segmentPassed = 0;
-        const temp = dx;
-        dx = -dy;
-        dy = temp;
-        segmentTurns += 1;
-        if (segmentTurns % 2 === 0) {
-          segmentLength += 1;
-        }
-      }
-
-      return pos;
-    };
-  }
-
-  function randomRange(min, max) {
-    return Math.random() * (max - min) + min;
   }
 
   if (document.readyState === 'loading') {
