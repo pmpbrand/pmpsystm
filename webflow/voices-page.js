@@ -90,8 +90,9 @@
     let pendingAutoLoad = false;
     const confessionMap = new Map();
 
-    const { cellWidth, cellHeight } = getCellMetrics(templateBlock, viewport);
-    const columns = getColumnCount(viewport, cellWidth);
+    const { cellWidth, cellHeight } = measureBlock(templateBlock);
+    const viewportWidth = viewport?.clientWidth || window.innerWidth || cellWidth;
+    const columns = Math.max(1, Math.floor(viewportWidth / cellWidth));
     const occupancy = new Set();
     let cursorCol = 0;
     let cursorRow = 0;
@@ -425,37 +426,6 @@
     worldContainer.style.height = `${nextHeight}px`;
   }
 
-  function getCellMetrics(templateBlock, viewport) {
-    const dataSize = templateBlock.getAttribute('data-voices-cell-size') || viewport?.getAttribute('data-voices-cell-size');
-    const dataWidth = templateBlock.getAttribute('data-voices-cell-width') || viewport?.getAttribute('data-voices-cell-width');
-    const dataHeight = templateBlock.getAttribute('data-voices-cell-height') || viewport?.getAttribute('data-voices-cell-height');
-
-    const parsedSize = dataSize ? parseFloat(dataSize) : 0;
-    const parsedWidth = dataWidth ? parseFloat(dataWidth) : 0;
-    const parsedHeight = dataHeight ? parseFloat(dataHeight) : 0;
-
-    if (parsedSize || (parsedWidth && parsedHeight)) {
-      const width = parsedWidth || parsedSize;
-      const height = parsedHeight || parsedSize;
-      return {
-        cellWidth: width,
-        cellHeight: height,
-      };
-    }
-
-    return measureBlock(templateBlock);
-  }
-
-  function getColumnCount(viewport, cellWidth) {
-    const dataColumns = viewport?.getAttribute('data-voices-columns');
-    const parsedColumns = dataColumns ? parseInt(dataColumns, 10) : 0;
-    if (parsedColumns && parsedColumns > 0) {
-      return parsedColumns;
-    }
-    const viewportWidth = viewport?.clientWidth || window.innerWidth || cellWidth;
-    return Math.max(1, Math.floor(viewportWidth / cellWidth));
-  }
-
   function measureBlock(templateBlock) {
     let rect = templateBlock.getBoundingClientRect();
     const computed = window.getComputedStyle(templateBlock);
@@ -469,13 +439,26 @@
       clone.style.display = 'block';
       clone.style.left = '-9999px';
       clone.style.top = '0';
+
+      const computedWidth = computed.width;
+      const computedHeight = computed.height;
+      if (computedWidth && computedWidth !== 'auto') {
+        clone.style.width = computedWidth;
+      }
+      if (computedHeight && computedHeight !== 'auto') {
+        clone.style.height = computedHeight;
+      }
+
       document.body.appendChild(clone);
       rect = clone.getBoundingClientRect();
       clone.remove();
     }
 
-    const blockWidth = rect.width || 400;
-    const blockHeight = rect.height || 400;
+    const fallbackWidth = parseFloat(computed.width || '0') || 400;
+    const fallbackHeight = parseFloat(computed.height || '0') || 400;
+
+    const blockWidth = rect.width || fallbackWidth;
+    const blockHeight = rect.height || fallbackHeight;
 
     return {
       cellWidth: blockWidth + marginX,
