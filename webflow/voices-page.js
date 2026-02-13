@@ -64,11 +64,10 @@
       'input[type="text"]'
     ], gateForm || document);
 
-    const submitButton = getElement([
-      '#voices-ticket-submit',
-      'button[type="submit"]',
-      '.voices-ticket-submit'
-    ], gateForm || document);
+    const submitButtons = [];
+    const submitButtonNodes = gateForm
+      ? gateForm.querySelectorAll('#voices-ticket-submit, button[type="submit"], .voices-ticket-submit, button:not([type])')
+      : document.querySelectorAll('#voices-ticket-submit, button[type="submit"], .voices-ticket-submit, button:not([type])');
 
     const loadingEl = getElement([
       '[data-voices-loading]',
@@ -102,19 +101,30 @@
       loadingEl.style.display = 'none';
     }
 
-    if (submitButton) {
-      submitButton.addEventListener('click', (e) => {
+    const handleSubmit = (e) => {
+      if (e) {
         e.preventDefault();
-        validateAndLoad();
-      });
-    }
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+      validateAndLoad();
+    };
 
     if (gateForm) {
-      gateForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        validateAndLoad();
-      });
+      gateForm.removeAttribute('action');
+      gateForm.setAttribute('method', 'post');
+      gateForm.setAttribute('onsubmit', 'return false;');
+      gateForm.addEventListener('submit', handleSubmit, true);
     }
+
+    submitButtonNodes.forEach((btn) => {
+      const newBtn = btn.cloneNode(true);
+      if (btn.parentNode) {
+        btn.parentNode.replaceChild(newBtn, btn);
+      }
+      submitButtons.push(newBtn);
+      newBtn.addEventListener('click', handleSubmit, true);
+    });
 
     async function validateAndLoad() {
       if (isValidating) return;
@@ -166,10 +176,10 @@
     }
 
     function setGateBusy(isBusy) {
-      if (submitButton) {
-        submitButton.disabled = isBusy;
-        submitButton.setAttribute('aria-disabled', String(isBusy));
-      }
+      submitButtons.forEach((btn) => {
+        btn.disabled = isBusy;
+        btn.setAttribute('aria-disabled', String(isBusy));
+      });
       if (ticketInput) {
         ticketInput.disabled = isBusy;
       }
