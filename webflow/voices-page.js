@@ -45,8 +45,8 @@
       errorBox = createErrorBox(gateForm);
     }
 
-    const cellWidth = 350;
-    const cellHeight = 350;
+    const cellWidth = 300;
+    const cellHeight = 300;
     const columns = Math.max(1, Math.floor((viewport.clientWidth || window.innerWidth || cellWidth) / cellWidth));
 
     const occupancy = new Set();
