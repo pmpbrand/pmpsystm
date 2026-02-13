@@ -45,7 +45,8 @@
       errorBox = createErrorBox(gateForm);
     }
 
-    const { cellWidth, cellHeight } = measureBlock(smallTemplate);
+    const cellWidth = 350;
+    const cellHeight = 350;
     const columns = Math.max(1, Math.floor((viewport.clientWidth || window.innerWidth || cellWidth) / cellWidth));
 
     const occupancy = new Set();
@@ -351,35 +352,6 @@
     worldContainer.style.height = `${nextHeight}px`;
   }
 
-  function measureBlock(templateBlock) {
-    let rect = templateBlock.getBoundingClientRect();
-    const computed = window.getComputedStyle(templateBlock);
-    const marginX = parseFloat(computed.marginLeft || '0') + parseFloat(computed.marginRight || '0');
-    const marginY = parseFloat(computed.marginTop || '0') + parseFloat(computed.marginBottom || '0');
-
-    if (!rect.width || !rect.height) {
-      const clone = templateBlock.cloneNode(true);
-      clone.style.visibility = 'hidden';
-      clone.style.position = 'absolute';
-      clone.style.display = 'block';
-      clone.style.left = '-9999px';
-      clone.style.top = '0';
-      document.body.appendChild(clone);
-      rect = clone.getBoundingClientRect();
-      clone.remove();
-    }
-
-    const fallbackWidth = parseFloat(computed.width || '0') || 400;
-    const fallbackHeight = parseFloat(computed.height || '0') || 400;
-
-    const blockWidth = rect.width || fallbackWidth;
-    const blockHeight = rect.height || fallbackHeight;
-
-    return {
-      cellWidth: blockWidth + marginX,
-      cellHeight: blockHeight + marginY,
-    };
-  }
 
   function setupWorldStyles(viewport, worldContainer) {
     viewport.style.overflow = 'hidden';
