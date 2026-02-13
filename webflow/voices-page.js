@@ -115,6 +115,11 @@
       gateForm.setAttribute('method', 'post');
       gateForm.setAttribute('onsubmit', 'return false;');
       gateForm.addEventListener('submit', handleSubmit, true);
+      gateForm.onsubmit = function(e) {
+        e.preventDefault();
+        handleSubmit(e);
+        return false;
+      };
     }
 
     submitButtonNodes.forEach((btn) => {
@@ -123,7 +128,17 @@
         btn.parentNode.replaceChild(newBtn, btn);
       }
       submitButtons.push(newBtn);
-      newBtn.addEventListener('click', handleSubmit, true);
+      newBtn.addEventListener('click', function(e) {
+        if (e.target.type === 'submit' || e.target.tagName === 'BUTTON') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (gateForm && !isValidating) {
+            gateForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          } else if (!gateForm) {
+            handleSubmit(e);
+          }
+        }
+      }, true);
     });
 
     async function validateAndLoad() {
